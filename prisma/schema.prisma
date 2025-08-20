@@ -1,0 +1,189 @@
+// Prisma schema for Confetti API
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// User of the platform. Users may have different roles.
+model User {
+  id        String    @id @default(uuid())
+  name      String
+  phone     String    @unique
+  role      Role      @default(USER)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  bookings  Booking[]
+  reviews   Review[]
+}
+
+/// A vendor provides services (venues, catering, entertainment, etc.).
+model Vendor {
+  id          String       @id @default(uuid())
+  name        String
+  category    ServiceCategory
+  city        String
+  description String?
+  phone       String
+  email       String?
+  services    Service[]
+  bookings    Booking[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+/// A service offered by a vendor. Can represent a hall, catering menu, decor package, etc.
+model Service {
+  id          String       @id @default(uuid())
+  vendorId    String
+  vendor      Vendor       @relation(fields: [vendorId], references: [id])
+  title       String
+  description String?
+  basePrice   Float
+  options     CatalogItem[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+/// Individual catalog item (e.g. menu item, decor option) attached to a service.
+model CatalogItem {
+  id        String   @id @default(uuid())
+  serviceId String
+  service   Service  @relation(fields: [serviceId], references: [id])
+  name      String
+  price     Float
+  leadTimeDays Int?
+}
+
+/// A booking linking a user and a vendor/service at a given date.
+model Booking {
+  id          String        @id @default(uuid())
+  userId      String
+  user        User          @relation(fields: [userId], references: [id])
+  vendorId    String
+  vendor      Vendor        @relation(fields: [vendorId], references: [id])
+  serviceId   String?
+  service     Service?      @relation(fields: [serviceId], references: [id])
+  date        DateTime
+  guests      Int
+  totalAmount Float
+  status      BookingStatus @default(PENDING)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  payment     Payment?
+  delivery    Delivery?
+  review      Review?
+}
+
+/// Payment information for a booking.
+model Payment {
+  id         String        @id @default(uuid())
+  bookingId  String        @unique
+  booking    Booking       @relation(fields: [bookingId], references: [id])
+  provider   String
+  intentId   String
+  amount     Float
+  currency   String        @default("SAR")
+  status     PaymentStatus @default(PENDING)
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+}
+
+/// Delivery details for a booking (e.g. scheduled shipping of equipment).
+model Delivery {
+  id          String         @id @default(uuid())
+  bookingId   String         @unique
+  booking     Booking        @relation(fields: [bookingId], references: [id])
+  provider    String
+  quote       Float?
+  trackingId  String?
+  status      DeliveryStatus @default(PENDING)
+  scheduledAt DateTime?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+}
+
+/// User review for a completed booking.
+model Review {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  bookingId String   @unique
+  booking   Booking  @relation(fields: [bookingId], references: [id])
+  rating    Int
+  comment   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// Addresses can be linked to users or vendors for deliveries. This may be expanded later.
+model Address {
+  id        String   @id @default(uuid())
+  userId    String?  
+  vendorId  String?  
+  line1     String
+  line2     String?
+  city      String
+  state     String?
+  postalCode String?
+  country   String   @default("SA")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// Audit log to track administrative overrides and sensitive actions.
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  action    String
+  entityId  String?
+  entityType String?
+  timestamp DateTime @default(now())
+  metadata  Json?
+}
+
+enum ServiceCategory {
+  VENUE
+  CATERING
+  DECOR
+  ENTERTAINMENT
+  RESTAURANT
+  CAFE
+  PASTRY
+  OTHER
+}
+
+enum BookingStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  PAID
+  CANCELLED
+  COMPLETED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+enum DeliveryStatus {
+  PENDING
+  SCHEDULED
+  IN_TRANSIT
+  DELIVERED
+  CANCELLED
+}
+
+enum Role {
+  USER
+  VENDOR
+  ADMIN
+}
